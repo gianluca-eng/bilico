@@ -1,0 +1,52 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Claude Code settings (possono contenere segreti nei log dei comandi)
+.claude/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vercel
+
+# ─── Capacitor — nativo ─────────────────────────────────────────────
+# Android build artefatti e dipendenze
+android/.gradle
+android/app/build
+android/build
+android/captures
+android/local.properties
+android/app/release
+android/app/google-services.json
+# iOS build artefatti e dipendenze CocoaPods
+ios/App/build
+ios/App/Pods
+ios/App/Podfile.lock
+ios/App/DerivedData
+ios/App/App.xcworkspace/xcuserdata
+ios/App/App.xcodeproj/xcuserdata
+# Handoff/zip di design (se residuati nel progetto)
+*.zip

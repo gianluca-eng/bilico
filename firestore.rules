@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── users/{userId} ────────────────────────────────────────────────────
+    // Lettura: qualsiasi utente autenticato.
+    //   Serve per:
+    //   - Invito famiglia: il partner deve poter leggere il nome del creatore
+    //   - Lista membri famiglia: ogni membro vede i colori/nomi degli altri
+    // Scrittura:
+    //   - Il proprietario può creare/cancellare/aggiornare tutto
+    //   - Un altro utente autenticato può SOLO aggiungersi ai familyMembers
+    //     (serve per il flusso di join famiglia)
+    match /users/{userId} {
+      allow read: if request.auth != null;
+
+      allow create, delete: if request.auth != null && request.auth.uid == userId;
+
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        // Altro utente può solo aggiungersi ai membri famiglia (non altro)
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['familyMembers'])
+          && request.resource.data.familyMembers.size() == resource.data.get('familyMembers', []).size() + 1
+        )
+      );
+    }
+
+    // ─── transactions/{txId} ───────────────────────────────────────────────
+    // Le transazioni sono condivise per famiglia (familyId).
+    // Lettura: qualsiasi utente autenticato. La query filtra lato client
+    //   usando `where familyId == <mio familyId>`.
+    // Scrittura:
+    //   - create: solo se userId del nuovo doc è il mio uid
+    //   - update/delete: solo chi ha creato il doc (userId == uid)
+    match /transactions/{txId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+    }
+  }
+}

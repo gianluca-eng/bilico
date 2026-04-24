@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Epilogue:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --blue:   #2D6BE4;
+  --bg:     #F4F4F1;
+  --white:  #FFFFFF;
+  --ink:    #0E0E0E;
+  --green:  #16A34A;
+  --amber:  #D97706;
+  --red:    #DC2626;
+  --violet: #7C3AED;
+}
+
+@layer base {
+  html {
+    font-family: 'Epilogue', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg);
+  }
+
+  #root {
+    min-height: 100svh;
+  }
+}
