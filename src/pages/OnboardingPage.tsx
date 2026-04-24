@@ -10,7 +10,7 @@ import type {
 import { OnbShell, ChipPill } from '../components/Ui';
 import {
   H, B, SERIF,
-  INK, CREAM, ORANGE, GREEN, LILAC, MINT, CORAL, SAND, INK_50,
+  INK, CREAM, ORANGE, GREEN, LILAC, MINT, CORAL, SAND, INK_50, INK_70,
   OFFSET,
 } from '../components/tokens';
 
@@ -23,20 +23,6 @@ const GOAL_TO_FINANCIAL: Record<GoalId, FinancialGoal> = {
   debito:    'emergency',
   famiglia:  'understand',
 };
-
-interface GoalOption {
-  id: GoalId;
-  label: string;
-  color: string;
-  emoji: string;
-}
-
-const GOAL_OPTIONS: GoalOption[] = [
-  { id: 'serenita',  label: 'Serenità a fine mese', color: MINT,   emoji: '🫧' },
-  { id: 'risparmio', label: 'Mettere da parte',      color: LILAC,  emoji: '🌱' },
-  { id: 'debito',    label: 'Uscire dai rossi',      color: ORANGE, emoji: '↘' },
-  { id: 'famiglia',  label: 'Decidere in due',       color: GREEN,  emoji: '◐' },
-];
 
 // ─── Categorie budget (struttura compatibile con Firestore) ──────────────────
 // BASE: sempre presenti — le spese "universali" che praticamente tutti hanno.
@@ -111,33 +97,39 @@ function computePercentages(cats: CatDef[]): Record<string, number> {
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
-type StepId = 'goal' | 'income' | 'fixed' | 'lifestyle' | 'savings';
-const STEP_ORDER: StepId[] = ['goal', 'income', 'fixed', 'lifestyle', 'savings'];
-const ONB_TOTAL = STEP_ORDER.length;
+type StepId = 'intro' | 'income' | 'fixed' | 'lifestyle' | 'savings';
 
 export default function OnboardingPage() {
   const { user, profile, setProfile } = useStore();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<StepId>('goal');
+  // Partner: chi è già in un gruppo famiglia creato da altri.
+  // Per lui saltiamo intro (è già stato invitato) e gli step famiglia (eredita).
+  const isPartner = !!profile?.familyId && profile.familyId !== user?.uid;
 
-  // Goal
-  const [goal, setGoal] = useState<GoalId>('serenita');
+  const STEP_ORDER: StepId[] = isPartner
+    ? ['income']
+    : ['intro', 'income', 'fixed', 'lifestyle', 'savings'];
+  const ONB_TOTAL = STEP_ORDER.length;
 
-  // Income
-  const [income, setIncome] = useState<string>('2200');
+  const [step, setStep] = useState<StepId>(STEP_ORDER[0]);
 
-  // Fixed expenses (stringa per gestire input vuoto)
+  // Goal — default non mostrato, settato tecnicamente per compat con schema.
+  const [goal] = useState<GoalId>('serenita');
+
+  // Income — vuoto di default (niente nudging numerico)
+  const [income, setIncome] = useState<string>('');
+
+  // Fixed expenses — tutti vuoti di default
   const [fixed, setFixed] = useState<Record<string, string>>({
-    affitto: '650', bollette: '120', abbonamenti: '35', trasporti: '45', altro: '80',
+    affitto: '', bollette: '', abbonamenti: '', trasporti: '', altro: '',
   });
 
-  // Lifestyle habits
-  // Preselezione neutra: nessuna abitudine → l'utente spunta solo ciò che lo riguarda
+  // Lifestyle habits — nessuna preselezione
   const [habits, setHabits] = useState<string[]>([]);
 
-  // Savings %
-  const [pct, setPct] = useState(15);
+  // Savings % — default 10% (equilibrato)
+  const [pct, setPct] = useState(10);
 
   const [saving, setSaving] = useState(false);
 
@@ -235,54 +227,91 @@ export default function OnboardingPage() {
 
   // ─── Renders per step ────────────────────────────────────────────────────
 
-  if (step === 'goal') {
+  if (step === 'intro') {
+    const introCards = [
+      { emoji: '📥', title: 'Il tuo reddito', text: 'Quanto entra ogni mese. Ci serve per capire cosa puoi spendere.', color: MINT },
+      { emoji: '🏠', title: 'Le spese fisse', text: 'Mutuo, bollette, abbonamenti: cose che escono senza chiedere.', color: LILAC },
+      { emoji: '⚖️', title: 'Il bilico', text: 'Quello che resta si divide per categorie, con un tesoretto da parte.', color: ORANGE },
+    ];
     return (
       <OnbShell
         step={0}
         total={ONB_TOTAL}
-        title={<>Cosa cerchi<br /><span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>da Bilico?</span></>}
-        subtitle="Scegli l'obiettivo più vicino al tuo. Puoi cambiarlo quando vuoi."
+        title={<>Prima di chiederti<br /><span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>i numeri</span></>}
+        subtitle="Novanta secondi. Tre semplici concetti, poi via."
         onNext={goNext}
+        nextLabel="Iniziamo"
       >
-        <div style={{ display: 'grid', gap: 10 }}>
-          {GOAL_OPTIONS.map(o => {
-            const active = goal === o.id;
-            return (
-              <button
-                key={o.id}
-                onClick={() => setGoal(o.id)}
-                style={{
+        <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
+          {introCards.map((c, i) => (
+            <div key={c.title} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              background: CREAM,
+              border: `2.5px solid ${INK}`,
+              borderRadius: 18,
+              padding: '14px 16px',
+              boxShadow: OFFSET(),
+              position: 'relative',
+            }}>
+              <div style={{
+                width: 46,
+                height: 46,
+                borderRadius: 12,
+                background: c.color,
+                border: `2px solid ${INK}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 22,
+                flexShrink: 0,
+              }}>{c.emoji}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{
                   ...H,
-                  textAlign: 'left',
-                  border: `2.5px solid ${INK}`,
-                  borderRadius: 16,
-                  background: active ? o.color : CREAM,
-                  padding: '14px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 14,
-                  cursor: 'pointer',
-                  boxShadow: active ? OFFSET() : 'none',
-                  transform: active ? 'translate(-1px,-1px)' : 'none',
-                  transition: 'transform 80ms ease',
-                }}
-              >
-                <span style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: '50%',
-                  background: CREAM,
-                  border: `2px solid ${INK}`,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 18,
-                }}>{o.emoji}</span>
-                <span style={{ fontWeight: 700, fontSize: 15, color: INK }}>{o.label}</span>
-              </button>
-            );
-          })}
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  color: INK_50,
+                  fontWeight: 700,
+                }}>
+                  Step {i + 1}
+                </div>
+                <div style={{
+                  ...H,
+                  fontWeight: 800,
+                  fontSize: 15,
+                  color: INK,
+                  letterSpacing: '-0.3px',
+                  marginTop: 1,
+                }}>
+                  {c.title}
+                </div>
+                <div style={{
+                  ...B,
+                  fontSize: 12,
+                  color: INK_70,
+                  marginTop: 2,
+                  lineHeight: 1.35,
+                }}>
+                  {c.text}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
+        <p style={{
+          ...SERIF,
+          fontStyle: 'italic',
+          fontSize: 14,
+          color: INK_50,
+          textAlign: 'center',
+          margin: '18px 0 0',
+          lineHeight: 1.4,
+        }}>
+          I tuoi numeri restano sul tuo dispositivo e sul tuo Firebase personale.
+        </p>
       </OnbShell>
     );
   }
@@ -297,12 +326,16 @@ export default function OnboardingPage() {
     ];
     return (
       <OnbShell
-        step={1}
+        step={STEP_ORDER.indexOf('income')}
         total={ONB_TOTAL}
-        title={<>Quanto entra,<br /><span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>in media?</span></>}
-        subtitle="Stipendio, partita IVA, pensione — tutto ciò che arriva ogni mese."
-        onBack={goBack}
-        onNext={goNext}
+        title={<>{isPartner ? <>Il tuo<br /></> : <>Quanto entra,<br /></>}<span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>{isPartner ? 'reddito personale' : 'in media?'}</span></>}
+        subtitle={isPartner
+          ? 'Ci serve solo il tuo. Il resto l\'ha già impostato chi ti ha invitato.'
+          : 'Stipendio, partita IVA, pensione — tutto ciò che arriva ogni mese.'}
+        onBack={STEP_ORDER.indexOf('income') > 0 ? goBack : undefined}
+        onNext={isPartner ? handleComplete : goNext}
+        nextLabel={isPartner ? 'Entra in Bilico' : 'Continua'}
+        saving={saving}
       >
         <div style={{
           background: CREAM,
@@ -370,7 +403,7 @@ export default function OnboardingPage() {
   if (step === 'fixed') {
     return (
       <OnbShell
-        step={2}
+        step={STEP_ORDER.indexOf('fixed')}
         total={ONB_TOTAL}
         title={<>Cosa esce<br /><span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>senza chiedere?</span></>}
         subtitle="Le spese ricorrenti. Anche stime vanno benissimo."
@@ -461,7 +494,7 @@ export default function OnboardingPage() {
 
     return (
       <OnbShell
-        step={3}
+        step={STEP_ORDER.indexOf('lifestyle')}
         total={ONB_TOTAL}
         title={<>Le abitudini<br /><span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>che pesano.</span></>}
         subtitle="Scegli quelle che vuoi tenere d'occhio. Senza giudizio."
@@ -520,7 +553,7 @@ export default function OnboardingPage() {
 
   return (
     <OnbShell
-      step={4}
+      step={STEP_ORDER.indexOf('savings')}
       total={ONB_TOTAL}
       title={<>E il <span style={{ ...SERIF, fontStyle: 'italic', fontWeight: 400, color: CORAL, fontSize: 34 }}>tesoretto?</span></>}
       subtitle="Quanto vuoi mettere da parte ogni mese, a occhio?"

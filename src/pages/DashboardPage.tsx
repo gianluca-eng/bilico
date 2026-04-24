@@ -792,16 +792,6 @@ function AddExpenseModal({
           >
             <span style={{ fontSize: 16 }}>📸</span>
             Scansiona scontrino
-            <span style={{
-              ...H,
-              fontSize: 9,
-              fontWeight: 800,
-              background: INK,
-              color: CREAM,
-              padding: '2px 6px',
-              borderRadius: 6,
-              letterSpacing: '0.5px',
-            }}>PRO</span>
           </button>
         )}
 
@@ -1326,9 +1316,52 @@ function ScanReceiptModal({ onClose, onResult }: ScanModalProps) {
         )}
 
         {error && (
-          <p style={{ ...B, fontSize: 13, color: CORAL, marginTop: 12, textAlign: 'center' }}>
-            {error}
-          </p>
+          <div style={{
+            marginTop: 14,
+            background: CORAL + '12',
+            border: `2px solid ${CORAL}`,
+            borderRadius: 14,
+            padding: '14px 16px',
+          }}>
+            <p style={{ ...H, fontSize: 13, color: CORAL, fontWeight: 700, margin: '0 0 8px' }}>
+              Scansione non riuscita
+            </p>
+            <p style={{ ...B, fontSize: 12, color: INK_70, margin: '0 0 10px', lineHeight: 1.4 }}>
+              {error}
+            </p>
+            <div style={{
+              ...H,
+              fontSize: 10,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              color: INK_50,
+              fontWeight: 700,
+              marginBottom: 6,
+            }}>
+              Suggerimenti
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[
+                { emoji: '💡', label: 'Luce buona' },
+                { emoji: '📐', label: 'Inquadra tutto' },
+                { emoji: '✋', label: 'Niente mani sopra' },
+              ].map(t => (
+                <div key={t.label} style={{
+                  flex: 1,
+                  background: CREAM,
+                  border: `1.5px solid ${INK}`,
+                  borderRadius: 10,
+                  padding: '8px 6px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 20, lineHeight: 1 }}>{t.emoji}</div>
+                  <div style={{ ...B, fontSize: 10, color: INK_70, fontWeight: 600, marginTop: 4, lineHeight: 1.2 }}>
+                    {t.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </>
@@ -2099,34 +2132,117 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div style={{ marginTop: 18 }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                  marginBottom: 8,
-                }}>
-                  <div style={{ ...H, fontWeight: 800, fontSize: 16, color: INK }}>Movimenti recenti</div>
-                  {monthTxs.length > 3 && (
-                    <button
-                      onClick={() => setTab('movimenti')}
-                      style={{
-                        ...H,
-                        fontWeight: 700,
-                        fontSize: 12,
-                        color: INK,
-                        opacity: 0.6,
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Vedi tutti →
-                    </button>
-                  )}
+              {/* Primo accesso: CTA guidate invece della lista vuota */}
+              {transactions.length === 0 ? (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{
+                    ...H,
+                    fontSize: 11,
+                    letterSpacing: 2,
+                    textTransform: 'uppercase',
+                    color: INK_50,
+                    fontWeight: 700,
+                    marginBottom: 10,
+                  }}>
+                    Prossimi passi
+                  </div>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {[
+                      {
+                        emoji: '➕',
+                        color: ORANGE,
+                        title: 'Aggiungi la prima spesa',
+                        hint: 'Premi il + in basso a destra. Bastano 5 secondi.',
+                        onClick: openAdd,
+                      },
+                      ...(isFamilyUser ? [] : [{
+                        emoji: '👥',
+                        color: MINT,
+                        title: 'Invita il partner',
+                        hint: 'Condividi il budget in due. Si capisce meglio chi spende cosa.',
+                        onClick: () => navigate('/family'),
+                      }]),
+                      {
+                        emoji: '🎯',
+                        color: LILAC,
+                        title: 'Vedi i tuoi obiettivi',
+                        hint: 'Budget per categoria, risparmio, trofei.',
+                        onClick: () => setTab('obiettivi'),
+                      },
+                    ].map(c => (
+                      <button
+                        key={c.title}
+                        onClick={c.onClick}
+                        style={{
+                          ...H,
+                          width: '100%',
+                          textAlign: 'left',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          background: CREAM,
+                          border: `2.5px solid ${INK}`,
+                          borderRadius: 16,
+                          padding: '12px 14px',
+                          cursor: 'pointer',
+                          boxShadow: OFFSET(),
+                          transition: 'transform 80ms ease',
+                        }}
+                        onMouseDown={e => (e.currentTarget.style.transform = 'translate(1px,1px)')}
+                        onMouseUp={e => (e.currentTarget.style.transform = 'none')}
+                        onMouseLeave={e => (e.currentTarget.style.transform = 'none')}
+                      >
+                        <div style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 12,
+                          background: c.color,
+                          border: `2px solid ${INK}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 20,
+                          flexShrink: 0,
+                        }}>{c.emoji}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ ...H, fontWeight: 800, fontSize: 14, color: INK, letterSpacing: '-0.2px' }}>{c.title}</div>
+                          <div style={{ ...B, fontSize: 12, color: INK_70, marginTop: 1, lineHeight: 1.3 }}>{c.hint}</div>
+                        </div>
+                        <span aria-hidden style={{ ...H, fontSize: 18, color: INK_50, fontWeight: 700 }}>›</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <TxList tx={monthTxsList.slice(0, 3)} onEdit={setEditingTx} />
-              </div>
+              ) : (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: 8,
+                  }}>
+                    <div style={{ ...H, fontWeight: 800, fontSize: 16, color: INK }}>Movimenti recenti</div>
+                    {monthTxs.length > 3 && (
+                      <button
+                        onClick={() => setTab('movimenti')}
+                        style={{
+                          ...H,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          color: INK,
+                          opacity: 0.6,
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Vedi tutti →
+                      </button>
+                    )}
+                  </div>
+                  <TxList tx={monthTxsList.slice(0, 3)} onEdit={setEditingTx} />
+                </div>
+              )}
             </>
           )}
 

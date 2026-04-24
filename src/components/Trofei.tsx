@@ -57,8 +57,8 @@ export function Trofei({ badges }: { badges: UnlockedBadge[] }) {
               key={b.def.id}
               onClick={() => setDetail(b)}
               style={{
-                background: CREAM,
-                border: `2.5px solid ${INK}`,
+                background: isUnlocked ? CREAM : INK + '0D',
+                border: `2.5px solid ${isUnlocked ? INK : INK + '55'}`,
                 borderRadius: 14,
                 padding: '14px 8px 10px',
                 boxShadow: isUnlocked ? OFFSET(ORANGE) : 'none',
@@ -67,8 +67,6 @@ export function Trofei({ badges }: { badges: UnlockedBadge[] }) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: 4,
-                opacity: isUnlocked ? 1 : 0.35,
-                filter: isUnlocked ? 'none' : 'grayscale(80%)',
                 transition: 'transform 80ms ease',
                 ...H,
               }}
@@ -76,17 +74,32 @@ export function Trofei({ badges }: { badges: UnlockedBadge[] }) {
               onMouseUp={e => (e.currentTarget.style.transform = 'none')}
               onMouseLeave={e => (e.currentTarget.style.transform = 'none')}
             >
-              <div style={{ fontSize: 32, lineHeight: 1 }}>{b.def.emoji}</div>
+              <div style={{
+                fontSize: 32,
+                lineHeight: 1,
+                // Locked: nascondi emoji, mostra "?" in stile misterioso
+                ...(isUnlocked ? {} : {
+                  color: INK + '55',
+                  fontFamily: "'Instrument Serif', serif",
+                  fontStyle: 'italic',
+                  fontSize: 36,
+                  fontWeight: 400,
+                }),
+              }}>
+                {isUnlocked ? b.def.emoji : '?'}
+              </div>
               <div style={{
                 ...H,
                 fontSize: 10,
                 fontWeight: 700,
-                color: INK,
+                color: isUnlocked ? INK : INK + '55',
                 textAlign: 'center',
                 lineHeight: 1.1,
                 marginTop: 4,
                 minHeight: 22,
-              }}>{b.def.name}</div>
+                textTransform: isUnlocked ? 'none' : 'uppercase',
+                letterSpacing: isUnlocked ? 0 : 1,
+              }}>{isUnlocked ? b.def.name : 'Bloccato'}</div>
             </button>
           );
         })}
