@@ -27,6 +27,11 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
 export const googleProvider = new GoogleAuthProvider();
+// Forza Google a mostrare il selettore di account ad ogni login,
+// anche se l'utente è già loggato in un account Google nel browser.
+// Utile su dispositivi condivisi e per cambiare account senza fare logout dal SO.
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export default app;

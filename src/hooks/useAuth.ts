@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, getRedirectResult, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, googleProvider, db } from '../lib/firebase';
@@ -30,33 +30,64 @@ export function useAuth() {
     // Fallback: se Firebase non risponde entro 5s, sblocca comunque l'app
     const timeout = setTimeout(() => setAuthLoading(false), 5000);
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // Sottoscrizione al profilo Firestore: oltre al primo load,
+    // questo riceve anche gli update da altri membri famiglia
+    // (es. quando il partner si unisce e si aggiunge ai familyMembers)
+    let profileUnsub: (() => void) | null = null;
+    let migrationDoneFor: string | null = null;
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       clearTimeout(timeout);
       console.log('[auth] onAuthStateChanged fired, user:', firebaseUser?.uid ?? 'null');
-      if (firebaseUser) {
-        const u: User = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-        };
-        setUser(u);
 
-        try {
-          const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
+      // Pulizia eventuale subscription precedente (logout o cambio account)
+      if (profileUnsub) {
+        profileUnsub();
+        profileUnsub = null;
+        migrationDoneFor = null;
+      }
+
+      if (!firebaseUser) {
+        // Pulizia totale alla disconnessione per evitare che dati
+        // del precedente account leggano a quello nuovo.
+        setUser(null);
+        setProfile(null);
+        setFamilyMembers([]);
+        setTransactions([]);
+        setBudgets([]);
+        setFamily(null);
+        setAuthLoading(false);
+        return;
+      }
+
+      const u: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+      };
+      setUser(u);
+
+      profileUnsub = onSnapshot(
+        doc(db, 'users', firebaseUser.uid),
+        async (snap) => {
           let profile = snap.exists() ? (snap.data() as UserProfile) : null;
 
           // Migration runtime: applica flag `shared` ai profili legacy.
-          if (profile) {
+          // Eseguita una sola volta per uid per evitare loop di scrittura.
+          if (profile && migrationDoneFor !== firebaseUser.uid) {
             const migrated = migrateSharedFlags(profile);
             if (migrated) {
               profile = migrated;
+              migrationDoneFor = firebaseUser.uid;
               try {
                 await setDoc(doc(db, 'users', firebaseUser.uid), migrated);
                 console.log('[auth] migrated shared flags for', firebaseUser.uid);
               } catch (err) {
                 console.warn('[auth] shared flags migration write failed:', err);
               }
+            } else {
+              migrationDoneFor = firebaseUser.uid;
             }
           }
 
@@ -73,27 +104,22 @@ export function useAuth() {
           } else {
             setFamilyMembers([]);
           }
-        } catch (err) {
-          console.warn('[auth] profile load failed:', err);
+
+          setAuthLoading(false);
+        },
+        (err) => {
+          console.warn('[auth] profile snapshot error:', err);
           setProfile(null);
           setFamilyMembers([]);
-        }
-      } else {
-        // Pulizia totale alla disconnessione per evitare che dati
-        // del precedente account leggano a quello nuovo.
-        setUser(null);
-        setProfile(null);
-        setFamilyMembers([]);
-        setTransactions([]);
-        setBudgets([]);
-        setFamily(null);
-      }
-      setAuthLoading(false);
+          setAuthLoading(false);
+        },
+      );
     });
 
     return () => {
       clearTimeout(timeout);
       unsubscribe();
+      if (profileUnsub) profileUnsub();
     };
   }, [
     setUser, setAuthLoading, setProfile, setFamilyMembers,
