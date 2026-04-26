@@ -9,7 +9,6 @@ import { useRecurring } from '../hooks/useRecurring';
 import { useBadges } from '../hooks/useBadges';
 import { scanReceipt } from '../lib/vision';
 import type { Transaction } from '../types';
-import { BalanceScale } from '../components/BalanceScale';
 import { BigButton, ChipPill, Panel, IconBtn, CloseX, useEscapeKey } from '../components/Ui';
 import { Trofei, BadgeToast } from '../components/Trofei';
 import {
@@ -411,7 +410,7 @@ function ObiettiviTab({ ym, badges }: ObiettiviTabProps) {
   const longGoals: Array<{ label: string; cur: number; tgt: number; color: string }> = [];
   if (savingsTarget > 0) {
     longGoals.push({
-      label: 'Tesoretto del mese',
+      label: 'Risparmio del mese',
       cur: Math.min(savingsTarget, savedEstimate),
       tgt: savingsTarget,
       color: GREEN,
@@ -1654,9 +1653,6 @@ export default function DashboardPage() {
   }, [profile]);
 
   const free = Math.max(0, freeBudget - spent);
-  const tiltBy = freeBudget > 0
-    ? Math.max(-18, Math.min(18, (spent / freeBudget - 0.5) * 20))
-    : 0;
 
   const weeklySpent = useMemo(() => {
     const since = new Date();
@@ -1917,48 +1913,88 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Toggle vista Io / Famiglia / Tutto (solo in famiglia) ── */}
-        {isFamilyUser && (
-          <div style={{ padding: '0 22px 10px', display: 'flex' }}>
-            <div style={{
-              display: 'flex',
-              gap: 2,
-              background: CREAM,
-              border: `2px solid ${INK}`,
-              borderRadius: 99,
-              padding: 3,
-              boxShadow: OFFSET_SM(),
-            }}>
-              {([
-                { id: 'me' as ViewMode,     label: 'Io' },
-                { id: 'family' as ViewMode, label: 'Famiglia' },
-                { id: 'all' as ViewMode,    label: 'Tutto' },
-              ]).map(v => {
-                const active = effectiveView === v.id;
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => setViewMode(v.id)}
-                    style={{
-                      ...H,
-                      padding: '6px 14px',
-                      borderRadius: 99,
-                      border: 'none',
-                      background: active ? INK : 'transparent',
-                      color: active ? CREAM : INK,
-                      fontWeight: 700,
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    {v.label}
-                  </button>
-                );
-              })}
+        {/* ── Toggle vista (solo in famiglia) ── */}
+        {isFamilyUser && (() => {
+          const partnerName = familyMembers
+            .find(m => m.uid !== user?.uid)
+            ?.name.split(' ')[0] ?? 'partner';
+
+          const VIEWS: Array<{ id: ViewMode; label: string; emoji: string; hint: string }> = [
+            {
+              id: 'all',
+              label: 'Tutto',
+              emoji: '🏠',
+              hint: 'Tutte le spese di tutti, condivise e personali.',
+            },
+            {
+              id: 'family',
+              label: 'Famiglia',
+              emoji: '👥',
+              hint: `Solo le spese in categorie di famiglia (Spesa, Casa, Figli…).`,
+            },
+            {
+              id: 'me',
+              label: 'Solo io',
+              emoji: '👤',
+              hint: `Solo le tue spese, escluse quelle di ${partnerName}.`,
+            },
+          ];
+          const activeView = VIEWS.find(v => v.id === effectiveView) ?? VIEWS[0];
+
+          return (
+            <div style={{ padding: '0 22px 10px' }}>
+              <div style={{
+                display: 'flex',
+                gap: 2,
+                background: CREAM,
+                border: `2px solid ${INK}`,
+                borderRadius: 99,
+                padding: 3,
+                boxShadow: OFFSET_SM(),
+                width: 'fit-content',
+              }}>
+                {VIEWS.map(v => {
+                  const active = effectiveView === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => setViewMode(v.id)}
+                      style={{
+                        ...H,
+                        padding: '6px 12px',
+                        borderRadius: 99,
+                        border: 'none',
+                        background: active ? INK : 'transparent',
+                        color: active ? CREAM : INK,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        letterSpacing: 0.3,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <span style={{ fontSize: 12 }}>{v.emoji}</span>
+                      <span>{v.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Micro-frase esplicativa che cambia col toggle */}
+              <p style={{
+                ...SERIF,
+                fontStyle: 'italic',
+                fontSize: 12,
+                color: INK_50,
+                margin: '6px 0 0',
+                lineHeight: 1.35,
+              }}>
+                {activeView.hint}
+              </p>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Tabs ── */}
         <div style={{ padding: '0 22px', display: 'flex', gap: 8, marginBottom: 10 }}>
@@ -1991,66 +2027,85 @@ export default function DashboardPage() {
         <div style={{ flex: 1, padding: '6px 22px 0' }}>
           {tab === 'casa' && (
             <>
-              <div style={{
-                background: CREAM,
-                border: `2.5px solid ${INK}`,
-                borderRadius: 24,
-                padding: 16,
-                boxShadow: OFFSET(),
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                <div aria-hidden style={{
-                  position: 'absolute',
-                  top: -12,
-                  right: -12,
-                  width: 54,
-                  height: 54,
-                  borderRadius: '50%',
-                  background: MINT,
-                  border: `2.5px solid ${INK}`,
-                }} />
-                <BalanceScale
-                  spent={spent}
-                  free={free}
-                  tiltBy={tiltBy}
-                  size="md"
-                  showDecoration={false}
-                />
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginTop: 6,
-                  padding: '0 6px',
-                }}>
-                  <div>
+              {(() => {
+                const pct = freeBudget > 0 ? Math.min(100, Math.round(spent / freeBudget * 100)) : 0;
+                const overspent = spent > freeBudget;
+                const barColor = overspent ? CORAL : pct >= 80 ? ORANGE : GREEN;
+                return (
+                  <div style={{
+                    background: CREAM,
+                    border: `2.5px solid ${INK}`,
+                    borderRadius: 20,
+                    padding: '16px 18px',
+                    boxShadow: OFFSET(),
+                  }}>
                     <div style={{
-                      ...H,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                      textTransform: 'uppercase',
-                      color: ORANGE,
-                      fontWeight: 700,
-                    }}>Speso</div>
-                    <div style={{ ...H, fontWeight: 800, fontSize: 22, color: INK, letterSpacing: '-0.5px' }}>
-                      {fmtN(spent)}
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                      gap: 16,
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          ...H,
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          textTransform: 'uppercase',
+                          color: ORANGE,
+                          fontWeight: 700,
+                        }}>Speso</div>
+                        <div style={{ ...H, fontWeight: 800, fontSize: 28, color: INK, letterSpacing: '-0.8px' }}>
+                          {fmtN(spent)}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', minWidth: 0 }}>
+                        <div style={{
+                          ...H,
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          textTransform: 'uppercase',
+                          color: overspent ? CORAL : GREEN,
+                          fontWeight: 700,
+                        }}>
+                          {overspent ? 'Sforato' : 'Ti restano'}
+                        </div>
+                        <div style={{ ...H, fontWeight: 800, fontSize: 28, color: INK, letterSpacing: '-0.8px' }}>
+                          {overspent ? `−${fmtN(spent - freeBudget)}` : fmtN(free)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Barra di avanzamento */}
+                    <div style={{
+                      marginTop: 14,
+                      height: 12,
+                      background: CREAM,
+                      border: `2px solid ${INK}`,
+                      borderRadius: 99,
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        width: `${pct}%`,
+                        height: '100%',
+                        background: barColor,
+                        borderRight: pct > 0 && pct < 100 ? `2px solid ${INK}` : 'none',
+                        transition: 'width 400ms ease',
+                      }} />
+                    </div>
+
+                    {/* Caption "X% di Y € di budget" */}
+                    <div style={{
+                      ...B,
+                      fontSize: 12,
+                      color: INK_70,
+                      marginTop: 6,
+                      lineHeight: 1.3,
+                    }}>
+                      Sei al <strong style={{ ...H, color: INK, fontWeight: 800 }}>{pct}%</strong> di {fmtN(freeBudget)} di budget mensile
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{
-                      ...H,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                      textTransform: 'uppercase',
-                      color: GREEN,
-                      fontWeight: 700,
-                    }}>Libero</div>
-                    <div style={{ ...H, fontWeight: 800, fontSize: 22, color: INK, letterSpacing: '-0.5px' }}>
-                      {fmtN(free)}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <Panel color={ORANGE} style={{ padding: 14 }}>
@@ -2074,27 +2129,42 @@ export default function DashboardPage() {
                     {fmtN(weeklySpent)}
                   </div>
                 </Panel>
-                <Panel color={GREEN} style={{ padding: 14 }}>
-                  <div style={{
-                    ...H,
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    textTransform: 'uppercase',
-                    color: CREAM,
-                    fontWeight: 700,
-                    opacity: 0.9,
-                  }}>Tesoretto</div>
-                  <div style={{
-                    ...H,
-                    fontWeight: 800,
-                    fontSize: 26,
-                    color: CREAM,
-                    letterSpacing: '-0.5px',
-                    marginTop: 2,
-                  }}>
-                    +{fmtN(free)}
-                  </div>
-                </Panel>
+                {(() => {
+                  const savingsItem = profile?.fixedExpenses.find(f => f.id === 'savings');
+                  const savingsTarget = savingsItem?.amount ?? 0;
+                  return (
+                    <Panel color={GREEN} style={{ padding: 14 }}>
+                      <div style={{
+                        ...H,
+                        fontSize: 10,
+                        letterSpacing: 1.5,
+                        textTransform: 'uppercase',
+                        color: CREAM,
+                        fontWeight: 700,
+                        opacity: 0.9,
+                      }}>Da risparmiare</div>
+                      <div style={{
+                        ...H,
+                        fontWeight: 800,
+                        fontSize: 26,
+                        color: CREAM,
+                        letterSpacing: '-0.5px',
+                        marginTop: 2,
+                      }}>
+                        {savingsTarget > 0 ? fmtN(savingsTarget) : '—'}
+                      </div>
+                      <div style={{
+                        ...B,
+                        fontSize: 11,
+                        color: CREAM,
+                        opacity: 0.85,
+                        marginTop: 2,
+                      }}>
+                        {savingsTarget > 0 ? 'obiettivo del mese' : 'imposta in profilo'}
+                      </div>
+                    </Panel>
+                  );
+                })()}
               </div>
 
               <div style={{

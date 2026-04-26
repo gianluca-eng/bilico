@@ -65,6 +65,77 @@ export default function JoinPage() {
     }
   };
 
+  /**
+   * Pre-iscrizione "scheletro" prima dell'onboarding.
+   * Usata quando l'utente clicca il link e non ha ancora un profilo:
+   * gli creiamo un doc users/{uid} già dentro la famiglia, poi
+   * lo mandiamo all'onboarding che si limita a chiedergli reddito.
+   */
+  const handleConfigureAccount = async () => {
+    if (!user || !familyId) return;
+
+    if (user.uid === familyId) {
+      setError('Non puoi unirti al tuo stesso gruppo!');
+      return;
+    }
+
+    setJoining(true);
+    setError('');
+    try {
+      const partnerMember: FamilyMember = {
+        uid: user.uid,
+        name: user.displayName ?? 'Partner',
+        color: PARTNER_COLOR,
+      };
+
+      // 1. Aggiungi me ai membri del creatore
+      const creatorSnap = await getDoc(doc(db, 'users', familyId));
+      if (creatorSnap.exists()) {
+        const creatorProfile = creatorSnap.data() as UserProfile;
+        const existing = creatorProfile.familyMembers ?? [];
+        const already = existing.some(m => m.uid === user.uid);
+        const updatedMembers: FamilyMember[] = already
+          ? existing
+          : [...existing, partnerMember];
+        await updateDoc(doc(db, 'users', familyId), { familyMembers: updatedMembers });
+      }
+
+      // 2. Crea profilo scheletro (NON ancora onboardato) già con familyId del gruppo
+      const creatorMemberEntry: FamilyMember = {
+        uid: familyId,
+        name: creatorName ?? 'Partner',
+        color: MEMBER_BLUE,
+      };
+      const myMember: FamilyMember = {
+        uid: user.uid,
+        name: user.displayName ?? 'Partner',
+        color: PARTNER_COLOR,
+      };
+      const skeleton: UserProfile = {
+        goal: 'control',
+        income: 0,
+        fixedExpenses: [],
+        categories: [],
+        onboardingComplete: false, // l'onboarding successivo lo metterà true
+        createdAt: new Date().toISOString(),
+        familyId,
+        familyMembers: [creatorMemberEntry, myMember],
+      };
+      await setDoc(doc(db, 'users', user.uid), skeleton);
+
+      // 3. Aggiorna lo store locale
+      setProfile(skeleton);
+      setFamilyMembers([creatorMemberEntry, myMember]);
+
+      // 4. Vai all'onboarding (che vedrà isPartner=true e farà solo lo step Reddito)
+      navigate('/onboarding');
+    } catch (e) {
+      console.error('[join] configure-account failed:', e);
+      setError('Errore di configurazione. Riprova.');
+      setJoining(false);
+    }
+  };
+
   const handleJoin = async () => {
     if (!user || !familyId || !profile) return;
 
@@ -298,9 +369,10 @@ export default function JoinPage() {
       ) : !profile?.onboardingComplete ? (
         <BigButton
           variant="ink"
-          onClick={() => navigate('/onboarding')}
+          onClick={handleConfigureAccount}
+          disabled={joining || loadingCreator}
         >
-          Configura account per procedere
+          {joining ? 'Preparo l\'account…' : 'Entra nel gruppo'}
         </BigButton>
       ) : profile.familyId && profile.familyId !== user.uid ? (
         <div style={{
