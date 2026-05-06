@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -1584,6 +1584,16 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('casa');
   const [showAdd, setShowAdd] = useState(false);
   const [showScan, setShowScan] = useState(false);
+  // Apri scan automaticamente al primo mount della dashboard:
+  // l'app esiste principalmente per fotografare scontrini.
+  // Una sola volta per sessione — se chiudi, non si riapre da solo.
+  const autoScanShownRef = useRef(false);
+  useEffect(() => {
+    if (autoScanShownRef.current) return;
+    if (!profile?.onboardingComplete) return;
+    autoScanShownRef.current = true;
+    setShowScan(true);
+  }, [profile?.onboardingComplete]);
   const [showProfile, setShowProfile] = useState(false);
   const [scanSeed, setScanSeed] = useState<{ amount: number; desc: string; category: string | null } | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);

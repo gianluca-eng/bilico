@@ -112,14 +112,21 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-/** Call Google Cloud Vision TEXT_DETECTION on an image file. */
+/** Call Google Cloud Vision DOCUMENT_TEXT_DETECTION on an image file.
+ *  DOCUMENT è specificamente ottimizzato per documenti strutturati (scontrini)
+ *  vs TEXT_DETECTION che è generico. Riconosce meglio l'allineamento colonne
+ *  e i numeri vicino alle etichette.
+ */
 async function ocrImage(file: File): Promise<string> {
   const base64 = await fileToBase64(file);
 
   const body = {
     requests: [{
       image: { content: base64 },
-      features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
+      features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+      imageContext: {
+        languageHints: ['it', 'en'],
+      },
     }],
   };
 
@@ -135,92 +142,185 @@ async function ocrImage(file: File): Promise<string> {
   }
 
   const data = await res.json();
+  // fullTextAnnotation è preferibile su DOCUMENT_TEXT_DETECTION,
+  // fallback su textAnnotations se non disponibile.
+  const fullText = data.responses?.[0]?.fullTextAnnotation?.text;
+  if (fullText) return fullText;
   const annotations = data.responses?.[0]?.textAnnotations;
   return annotations?.[0]?.description ?? '';
 }
 
 /**
- * Parse the OCR text from an Italian receipt to extract the total.
- * Looks for patterns like "TOTALE  12,50" or "TOTALE EURO  8.90" etc.
+ * Estrae un importo formato italiano o internazionale da una stringa.
+ * Gestisce: 12,50 / 12.50 / 1.234,56 / 1,234.56 / €12,50 / 12,50€
+ * Ritorna null se non trova un numero valido.
+ */
+function extractAmount(s: string): number | null {
+  // Cerca pattern numerico con 2 decimali
+  const m = s.match(/(\d{1,5}(?:[.,]\d{3})*[.,]\d{2})(?!\d)/);
+  if (!m) return null;
+  let raw = m[1];
+  // Determina il separatore decimale dall'ultimo carattere prima delle 2 cifre finali
+  if (/,\d{2}$/.test(raw)) {
+    // Italian: punto = migliaia, virgola = decimale
+    raw = raw.replace(/\./g, '').replace(',', '.');
+  } else if (/\.\d{2}$/.test(raw)) {
+    // English: virgola = migliaia, punto = decimale
+    raw = raw.replace(/,/g, '');
+  }
+  const n = parseFloat(raw);
+  if (!isFinite(n) || n <= 0 || n >= 100000) return null;
+  return n;
+}
+
+/**
+ * Parse OCR text di uno scontrino italiano per estrarre il totale.
+ *
+ * Strategia (in ordine di priorità):
+ *  1. Trova TUTTE le occorrenze di parole chiave totale + numero adiacente.
+ *     Prende l'ULTIMA (gli scontrini hanno spesso "Subtotale" + "Totale" alla fine).
+ *  2. Riconosce metodi di pagamento ("CONTANTI 12,50") che spesso sono il totale.
+ *  3. Esclude esplicitamente parole che NON sono il totale: SUBTOTALE, RESTO, SCONTO, IVA, ...
+ *  4. Fallback: numero più grande nell'ultimo terzo dello scontrino.
+ *  5. Fallback estremo: somma di tutti i prezzi (per scontrini senza totale esplicito).
  */
 function parseReceipt(text: string): { total: number | null; merchant: string | null } {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // ── Extract merchant: usually the first non-empty line ──
+  // ── Merchant: prima riga non vuota ──
   const merchant = lines[0] ?? null;
 
-  // ── Extract total ──
-  // Try patterns from most specific to least specific
-  const patterns = [
-    // "TOTALE EURO 12,50" or "TOTALE EUR 12.50"
-    /totale\s*(?:euro?|eur)\s*[€]?\s*(\d+[.,]\d{2})/i,
-    // "TOTALE  € 12,50" or "TOTALE €12.50"
-    /totale\s*[€]\s*(\d+[.,]\d{2})/i,
-    // "TOTALE  12,50"
-    /totale\s+(\d+[.,]\d{2})/i,
-    // "TOTALE COMPLESSIVO  12,50"
-    /totale\s+complessivo\s*[€]?\s*(\d+[.,]\d{2})/i,
-    // "TOTAL  12.50" (English receipts)
-    /total\s*[€]?\s*(\d+[.,]\d{2})/i,
-    // "DA PAGARE  12,50"
-    /da\s*pagare\s*[€]?\s*(\d+[.,]\d{2})/i,
-    // "IMPORTO  12,50"
-    /importo\s*[€]?\s*(\d+[.,]\d{2})/i,
+  // ── Setup keyword matching ──
+  // Parole che indicano il TOTALE (priorità alta).
+  // Ordinate dal più specifico al più generico.
+  const TOTAL_KEYWORDS = [
+    'totale complessivo',
+    'totale generale',
+    'totale finale',
+    'totale euro',
+    'totale eur',
+    'totale €',
+    'totale',
+    'tot.',
+    'tot ',
+    'tot€',
+    'totale dovuto',
+    'da pagare',
+    'importo dovuto',
+    'totale pagamento',
+    'pagamento',
   ];
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const num = parseFloat(match[1].replace(',', '.'));
-      if (num > 0 && num < 100000) return { total: num, merchant };
-    }
-  }
+  // Metodi di pagamento (priorità media): spesso seguiti dal totale
+  const PAYMENT_KEYWORDS = [
+    'contanti',
+    'contante',
+    'carta',
+    'bancomat',
+    'pos',
+    'paypal',
+    'satispay',
+    'pagopa',
+    'pagato',
+  ];
 
-  // Fallback 1: find the largest number that looks like a price on lines with "€"
-  let maxAmount = 0;
-  for (const line of lines) {
-    if (/€/.test(line) || /eur/i.test(line)) {
-      const amounts = line.match(/(\d+[.,]\d{2})/g);
-      if (amounts) {
-        for (const a of amounts) {
-          const n = parseFloat(a.replace(',', '.'));
-          if (n > maxAmount && n < 100000) maxAmount = n;
+  // Parole da ESCLUDERE: se la riga le contiene, non è il totale
+  const EXCLUDE_KEYWORDS = [
+    'subtotale',
+    'sub-totale',
+    'sub totale',
+    'parziale',
+    'resto',
+    'cambio',
+    'sconto',
+    'iva',
+    'imponibile',
+    'di cui iva',
+    'aliquota',
+  ];
+
+  const lineHasAny = (line: string, keywords: string[]) =>
+    keywords.some(k => line.includes(k));
+
+  // ── Step 1: cerca candidati totale ──
+  type Candidate = { idx: number; value: number; priority: number };
+  const candidates: Candidate[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const lower = lines[i].toLowerCase();
+
+    // Salta righe con parole escluse
+    if (lineHasAny(lower, EXCLUDE_KEYWORDS)) continue;
+
+    const hasTotal = lineHasAny(lower, TOTAL_KEYWORDS);
+    const hasPayment = lineHasAny(lower, PAYMENT_KEYWORDS);
+
+    if (!hasTotal && !hasPayment) continue;
+
+    // Estrai importo: stessa riga prima
+    let amount = extractAmount(lines[i]);
+    let foundIdx = i;
+
+    // Se non c'è sulla riga, prova le 2 righe successive
+    if (amount === null) {
+      for (let j = 1; j <= 2 && i + j < lines.length; j++) {
+        const nextLower = lines[i + j].toLowerCase();
+        // La riga successiva non deve essere un'altra label/exclusion
+        if (lineHasAny(nextLower, EXCLUDE_KEYWORDS)) break;
+        amount = extractAmount(lines[i + j]);
+        if (amount !== null) {
+          foundIdx = i + j;
+          break;
         }
       }
     }
+
+    if (amount !== null) {
+      const priority = hasTotal ? 100 : 50;
+      candidates.push({ idx: foundIdx, value: amount, priority });
+    }
   }
 
-  if (maxAmount > 0) return { total: maxAmount, merchant };
+  if (candidates.length > 0) {
+    // Prendi i candidati con priority massima (totale > payment)
+    const maxPrio = Math.max(...candidates.map(c => c.priority));
+    const top = candidates.filter(c => c.priority === maxPrio);
+    // Tra questi, l'ULTIMO (i totali finali sono in fondo allo scontrino)
+    const last = top[top.length - 1];
+    return { total: last.value, merchant };
+  }
 
-  // Fallback 2: sum all prices found (for receipts without a total line)
+  // ── Step 2 (fallback): numero più grande nell'ultimo terzo dello scontrino ──
+  // Gli scontrini hanno il totale verso la fine. Limitiamo la ricerca lì.
+  const tailStart = Math.floor(lines.length * 2 / 3);
+  let biggestTail = 0;
+  for (let i = tailStart; i < lines.length; i++) {
+    const lower = lines[i].toLowerCase();
+    if (lineHasAny(lower, EXCLUDE_KEYWORDS)) continue;
+    const amt = extractAmount(lines[i]);
+    if (amt !== null && amt > biggestTail) biggestTail = amt;
+  }
+  if (biggestTail > 0) return { total: biggestTail, merchant };
+
+  // ── Step 3 (fallback estremo): somma di tutti i prezzi end-of-line ──
+  // Per scontrini molto basic con solo voci e prezzi
   let sum = 0;
   let priceCount = 0;
   for (const line of lines) {
-    const amounts = line.match(/(\d+)[.,](\d{2})\s*$/);
-    if (amounts) {
-      const n = parseFloat(amounts[1] + '.' + amounts[2]);
-      if (n > 0 && n < 10000) {
+    const eol = line.match(/(\d+[.,]\d{2})\s*$/);
+    if (eol) {
+      const n = extractAmount(eol[1]);
+      if (n !== null && n < 10000) {
         sum += n;
         priceCount++;
       }
     }
   }
-
-  if (priceCount >= 2 && sum > 0) return { total: Math.round(sum * 100) / 100, merchant };
-
-  // Fallback 3: find the single largest price anywhere
-  let biggest = 0;
-  for (const line of lines) {
-    const allPrices = line.match(/(\d+)[.,](\d{2})/g);
-    if (allPrices) {
-      for (const p of allPrices) {
-        const n = parseFloat(p.replace(',', '.'));
-        if (n > biggest && n < 100000) biggest = n;
-      }
-    }
+  if (priceCount >= 2 && sum > 0) {
+    return { total: Math.round(sum * 100) / 100, merchant };
   }
 
-  return { total: biggest > 0 ? biggest : null, merchant };
+  return { total: null, merchant };
 }
 
 /** Main entry: scan a receipt image and return the extracted data. */
