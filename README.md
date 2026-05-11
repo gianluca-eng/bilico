@@ -2,7 +2,7 @@
 
 **Il budget familiare in bilico.** Un'app progressiva multipiattaforma (web + Android + iOS) per gestire insieme le spese di coppia e famiglia senza fogli Excel e senza sensi di colpa.
 
-Demo: https://quota-sigma.vercel.app
+Demo: https://bilico.vercel.app
 
 ## ✨ Cosa fa
 
