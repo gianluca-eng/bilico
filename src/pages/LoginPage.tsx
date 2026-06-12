@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useStore } from '../lib/store';
@@ -23,6 +23,7 @@ function GoogleG() {
 export default function LoginPage() {
   const { user, signInWithGoogle } = useAuth();
   const { profile, authLoading } = useStore();
+  const navigate = useNavigate();
   const [signing, setSigning] = useState(false);
   const [error, setError] = useState('');
 
@@ -162,6 +163,33 @@ export default function LoginPage() {
       }}>
         Niente pubblicità. Niente popup sui risparmi.<br />
         Solo <span style={{ ...SERIF, fontStyle: 'italic', fontSize: 14 }}>chiarezza</span>.
+      </p>
+
+      <p style={{
+        ...B,
+        fontSize: 11,
+        color: INK,
+        opacity: 0.5,
+        textAlign: 'center',
+        margin: '12px 0 0',
+      }}>
+        Accedendo accetti la{' '}
+        <button
+          onClick={() => navigate('/privacy')}
+          style={{
+            ...B,
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            color: INK,
+            fontSize: 11,
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
+        >
+          Privacy Policy
+        </button>.
       </p>
     </div>
   );

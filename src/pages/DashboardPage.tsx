@@ -1584,16 +1584,19 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('casa');
   const [showAdd, setShowAdd] = useState(false);
   const [showScan, setShowScan] = useState(false);
-  // Apri scan automaticamente al primo mount della dashboard:
-  // l'app esiste principalmente per fotografare scontrini.
+  // Apri lo scan automaticamente quando un utente ESPERTO riapre l'app:
+  // l'app esiste principalmente per fotografare scontrini, quindi è comodo.
+  // MA non al primissimo accesso (zero transazioni): lì mostriamo prima
+  // l'empty state guidato (aggiungi spesa, invita partner, ecc.).
   // Una sola volta per sessione — se chiudi, non si riapre da solo.
   const autoScanShownRef = useRef(false);
   useEffect(() => {
     if (autoScanShownRef.current) return;
     if (!profile?.onboardingComplete) return;
+    if (transactions.length === 0) return; // utente nuovo: niente scan automatico
     autoScanShownRef.current = true;
     setShowScan(true);
-  }, [profile?.onboardingComplete]);
+  }, [profile?.onboardingComplete, transactions.length]);
   const [showProfile, setShowProfile] = useState(false);
   const [scanSeed, setScanSeed] = useState<{ amount: number; desc: string; category: string | null } | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../lib/store';
 import { useAuth } from '../hooks/useAuth';
+import { getFamilyDoc, addMemberToFamily } from '../lib/family';
 import type { UserProfile, FamilyMember } from '../types';
 import { BigButton, IconBtn, ArrowLeft } from '../components/Ui';
 import { Wordmark } from '../components/BalanceScale';
@@ -13,15 +14,13 @@ import {
   OFFSET,
 } from '../components/tokens';
 
-// Colori dei membri (compatibili con gli altri hook)
-const MEMBER_BLUE = '#2D6BE4';
 const PARTNER_COLOR = ORANGE;
 
 export default function JoinPage() {
   const { familyId } = useParams<{ familyId: string }>();
   const navigate = useNavigate();
   const { user, signInWithGoogle } = useAuth();
-  const { profile, authLoading, setProfile, setFamilyMembers } = useStore();
+  const { profile, authLoading, setProfile } = useStore();
 
   const [creatorName, setCreatorName] = useState<string | null>(null);
   const [loadingCreator, setLoadingCreator] = useState(false);
@@ -30,24 +29,22 @@ export default function JoinPage() {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
-  // Carica il nome del creatore SOLO quando l'utente è loggato
-  // (le regole Firestore richiedono auth per read)
+  // Carica il nome del creatore dalla directory pubblica `families/`
+  // (contiene solo nomi/colori, nessun dato finanziario). Richiede login.
   useEffect(() => {
     if (!familyId || !user) return;
     setLoadingCreator(true);
     setError('');
-    getDoc(doc(db, 'users', familyId))
-      .then(snap => {
-        if (snap.exists()) {
-          const data = snap.data() as UserProfile;
-          const creator = data.familyMembers?.find(m => m.uid === familyId);
-          setCreatorName(creator?.name ?? 'qualcuno');
+    getFamilyDoc(familyId)
+      .then(fam => {
+        if (fam) {
+          setCreatorName(fam.creatorName ?? 'qualcuno');
         } else {
           setError('Link non valido o scaduto.');
         }
       })
       .catch(err => {
-        console.warn('[join] creator load failed:', err);
+        console.warn('[join] family load failed:', err);
         setError('Non riesco a leggere questo invito. Controlla la connessione.');
       })
       .finally(() => setLoadingCreator(false));
@@ -82,52 +79,32 @@ export default function JoinPage() {
     setJoining(true);
     setError('');
     try {
-      const partnerMember: FamilyMember = {
-        uid: user.uid,
-        name: user.displayName ?? 'Partner',
-        color: PARTNER_COLOR,
-      };
-
-      // 1. Aggiungi me ai membri del creatore
-      const creatorSnap = await getDoc(doc(db, 'users', familyId));
-      if (creatorSnap.exists()) {
-        const creatorProfile = creatorSnap.data() as UserProfile;
-        const existing = creatorProfile.familyMembers ?? [];
-        const already = existing.some(m => m.uid === user.uid);
-        const updatedMembers: FamilyMember[] = already
-          ? existing
-          : [...existing, partnerMember];
-        await updateDoc(doc(db, 'users', familyId), { familyMembers: updatedMembers });
-      }
-
-      // 2. Crea profilo scheletro (NON ancora onboardato) già con familyId del gruppo
-      const creatorMemberEntry: FamilyMember = {
-        uid: familyId,
-        name: creatorName ?? 'Partner',
-        color: MEMBER_BLUE,
-      };
       const myMember: FamilyMember = {
         uid: user.uid,
         name: user.displayName ?? 'Partner',
         color: PARTNER_COLOR,
       };
+
+      // 1. Aggiungimi alla directory pubblica della famiglia.
+      //    (Non tocco il profilo privato del creatore — non posso e non devo.)
+      await addMemberToFamily(familyId, myMember);
+
+      // 2. Crea il mio profilo scheletro, già con familyId del gruppo.
       const skeleton: UserProfile = {
         goal: 'control',
         income: 0,
         fixedExpenses: [],
         categories: [],
-        onboardingComplete: false, // l'onboarding successivo lo metterà true
+        onboardingComplete: false, // lo metterà true l'onboarding partner
         createdAt: new Date().toISOString(),
         familyId,
-        familyMembers: [creatorMemberEntry, myMember],
       };
       await setDoc(doc(db, 'users', user.uid), skeleton);
 
-      // 3. Aggiorna lo store locale
+      // 3. Aggiorna lo store locale (i membri arrivano live da useAuth).
       setProfile(skeleton);
-      setFamilyMembers([creatorMemberEntry, myMember]);
 
-      // 4. Vai all'onboarding (che vedrà isPartner=true e farà solo lo step Reddito)
+      // 4. Onboarding partner: 1 solo step (reddito personale).
       navigate('/onboarding');
     } catch (e) {
       console.error('[join] configure-account failed:', e);
@@ -152,45 +129,20 @@ export default function JoinPage() {
     setJoining(true);
     setError('');
     try {
-      const partnerMember: FamilyMember = {
-        uid: user.uid,
-        name: user.displayName ?? 'Partner',
-        color: PARTNER_COLOR,
-      };
-
-      // 1. Aggiungi me ai membri del creatore
-      const creatorSnap = await getDoc(doc(db, 'users', familyId));
-      if (creatorSnap.exists()) {
-        const creatorProfile = creatorSnap.data() as UserProfile;
-        const existing = creatorProfile.familyMembers ?? [];
-        const already = existing.some(m => m.uid === user.uid);
-        const updatedMembers: FamilyMember[] = already
-          ? existing
-          : [...existing, partnerMember];
-        await updateDoc(doc(db, 'users', familyId), { familyMembers: updatedMembers });
-      }
-
-      // 2. Aggiorna il mio profilo con familyId e membri
-      const creatorMemberEntry: FamilyMember = {
-        uid: familyId,
-        name: creatorName ?? 'Partner',
-        color: MEMBER_BLUE,
-      };
       const myMember: FamilyMember = {
         uid: user.uid,
         name: user.displayName ?? 'Partner',
         color: PARTNER_COLOR,
       };
 
-      const updatedProfile: UserProfile = {
-        ...profile,
-        familyId,
-        familyMembers: [creatorMemberEntry, myMember],
-      };
+      // 1. Aggiungimi alla directory pubblica della famiglia.
+      await addMemberToFamily(familyId, myMember);
+
+      // 2. Imposta il mio familyId sul mio profilo privato.
+      const updatedProfile: UserProfile = { ...profile, familyId };
       await setDoc(doc(db, 'users', user.uid), updatedProfile);
 
       setProfile(updatedProfile);
-      setFamilyMembers([creatorMemberEntry, myMember]);
 
       setDone(true);
       setTimeout(() => navigate('/dashboard'), 1800);

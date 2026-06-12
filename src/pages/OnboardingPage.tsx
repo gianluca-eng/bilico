@@ -4,6 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useStore } from '../lib/store';
 import { isCategorySharedByDefault } from '../lib/sharing';
+import { createFamilyDoc } from '../lib/family';
 import type {
   UserProfile, BudgetCategory, FixedExpense, FinancialGoal,
 } from '../types';
@@ -219,6 +220,13 @@ export default function OnboardingPage() {
     setProfile(savedProfile);
     try {
       await setDoc(doc(db, 'users', user.uid), savedProfile);
+      // Se sono il creatore della famiglia, creo/aggiorno la directory
+      // pubblica `families/{uid}` (nomi e colori, niente dati finanziari).
+      // Se sono un partner (familyId != uid), la directory esiste già:
+      // mi ci ha aggiunto il flusso di join.
+      if (savedProfile.familyId === user.uid) {
+        await createFamilyDoc(user.uid, user.displayName ?? 'Tu');
+      }
     } catch (err) {
       console.error('Firestore sync failed:', err);
     }

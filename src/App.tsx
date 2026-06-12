@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import OnboardingPage from './pages/OnboardingPage';
 import FamilyPage from './pages/FamilyPage';
 import JoinPage from './pages/JoinPage';
+import PrivacyPage from './pages/PrivacyPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Wordmark } from './components/BalanceScale';
 import { CREAM } from './components/tokens';
@@ -34,6 +35,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/join/:familyId" element={<JoinPage />} />
         <Route
