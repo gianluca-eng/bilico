@@ -47,5 +47,20 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.124241832106-77q52lh524mkhnj7matb27rk9ueptv34</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Bilico usa la fotocamera per scansionare gli scontrini e aggiungere le spese in automatico.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Bilico accede alle foto per leggere uno scontrino che hai già fotografato.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Bilico può salvare le foto degli scontrini nella tua libreria.</string>
 </dict>
 </plist>
