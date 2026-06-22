@@ -59,4 +59,4 @@ android/keystore-password.txt
 *.jks
 
 # Firebase iOS config (riscaricabile via firebase CLI)
-ios/App/App/GoogleService-Info.plist
+ios/App/App/GoogleService-Info*.plist
