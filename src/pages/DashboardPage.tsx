@@ -7,10 +7,12 @@ import { useStore } from '../lib/store';
 import { useTransactions } from '../hooks/useTransactions';
 import { useRecurring } from '../hooks/useRecurring';
 import { useBadges } from '../hooks/useBadges';
+import { usePro } from '../hooks/usePro';
 import { scanReceipt } from '../lib/vision';
 import type { Transaction } from '../types';
 import { BigButton, ChipPill, Panel, IconBtn, CloseX, useEscapeKey } from '../components/Ui';
 import { Trofei, BadgeToast } from '../components/Trofei';
+import PaywallSheet from '../components/PaywallSheet';
 import {
   H, B, SERIF,
   INK, CREAM, SAND, ORANGE, GREEN, LILAC, MINT, CORAL, INK_50, INK_70,
@@ -1373,13 +1375,14 @@ interface ProfileSheetProps {
   onLogout: () => void;
   onFamily: () => void;
   onResetOnboarding: () => void;
+  onPro: () => void;
   userName: string | null;
   userEmail: string | null;
   isPremium?: boolean;
 }
 
 function ProfileSheet({
-  onClose, onLogout, onFamily, onResetOnboarding,
+  onClose, onLogout, onFamily, onResetOnboarding, onPro,
   userName, userEmail, isPremium,
 }: ProfileSheetProps) {
   useEscapeKey(onClose);
@@ -1488,10 +1491,13 @@ function ProfileSheet({
             color={MINT}
             emoji="👥"
           />
+          {/* Il prezzo NON è scritto qui: arriva dallo store nella paywall,
+              così non può divergere da quello configurato su App Store
+              Connect / Play Console. */}
           <ProfileRow
             label="Bilico PRO"
-            hint={isPremium ? 'Attivo' : 'Scansiona scontrini · 3€/mese'}
-            onClick={() => window.open('mailto:bilico.app@gmail.com?subject=Attivazione%20Bilico%20PRO', '_blank')}
+            hint={isPremium ? 'Attivo' : 'Scansiona gli scontrini'}
+            onClick={onPro}
             color={ORANGE}
             emoji="📸"
           />
@@ -1584,19 +1590,31 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('casa');
   const [showAdd, setShowAdd] = useState(false);
   const [showScan, setShowScan] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  // La scansione scontrini è la funzione a pagamento: senza PRO il tocco
+  // sul pulsante apre la paywall invece dello scanner.
+  const pro = usePro();
+  const openScan = () => {
+    if (pro.isPro) setShowScan(true);
+    else setShowPaywall(true);
+  };
+
   // Apri lo scan automaticamente quando un utente ESPERTO riapre l'app:
   // l'app esiste principalmente per fotografare scontrini, quindi è comodo.
   // MA non al primissimo accesso (zero transazioni): lì mostriamo prima
   // l'empty state guidato (aggiungi spesa, invita partner, ecc.).
   // Una sola volta per sessione — se chiudi, non si riapre da solo.
+  // Mai per chi non ha il PRO: aprire una paywall all'avvio è aggressivo.
   const autoScanShownRef = useRef(false);
   useEffect(() => {
     if (autoScanShownRef.current) return;
     if (!profile?.onboardingComplete) return;
+    if (!pro.isPro) return;
     if (transactions.length === 0) return; // utente nuovo: niente scan automatico
     autoScanShownRef.current = true;
     setShowScan(true);
-  }, [profile?.onboardingComplete, transactions.length]);
+  }, [profile?.onboardingComplete, transactions.length, pro.isPro]);
   const [showProfile, setShowProfile] = useState(false);
   const [scanSeed, setScanSeed] = useState<{ amount: number; desc: string; category: string | null } | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -2426,7 +2444,7 @@ export default function DashboardPage() {
               { id: 'altro', name: 'Altro', emoji: '💸', color: SAND },
             ]}
             onAdd={handleAdd}
-            onScan={() => setShowScan(true)}
+            onScan={openScan}
             initialAmount={scanSeed ? String(scanSeed.amount) : undefined}
             initialDesc={scanSeed?.desc || undefined}
             initialCategory={scanSeed?.category || undefined}
@@ -2474,12 +2492,21 @@ export default function DashboardPage() {
           );
         })()}
 
+        {showPaywall && (
+          <PaywallSheet
+            pro={pro}
+            onClose={() => { pro.clearNotice(); setShowPaywall(false); }}
+            onPrivacy={() => { setShowPaywall(false); navigate('/privacy'); }}
+          />
+        )}
+
         {showProfile && (
           <ProfileSheet
             onClose={() => setShowProfile(false)}
             userName={user?.displayName ?? null}
             userEmail={user?.email ?? null}
-            isPremium={profile?.isPremium}
+            isPremium={pro.isPro}
+            onPro={() => { setShowProfile(false); setShowPaywall(true); }}
             onFamily={() => { setShowProfile(false); navigate('/family'); }}
             onResetOnboarding={handleResetOnboarding}
             onLogout={() => {

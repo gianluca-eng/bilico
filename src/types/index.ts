@@ -109,7 +109,12 @@ export interface UserProfile {
   createdAt: string;
   familyId?: string;          // uid del creatore del gruppo
   familyMembers?: FamilyMember[]; // tutti i membri (compreso se stessi)
-  isPremium?: boolean;         // true se abbonato PRO (scan scontrini)
+  /**
+   * Concessione PRO manuale (utenti storici attivati a mano).
+   * L'abbonamento vero vive su RevenueCat — vedi `usePro`: questo campo
+   * non viene mai riscritto dal flusso di acquisto.
+   */
+  isPremium?: boolean;
   premiumSince?: string;       // data attivazione ISO
   achievements?: Record<string, Achievement>; // badgeId → data di sblocco
 }
