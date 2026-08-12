@@ -9,7 +9,7 @@ Demo: https://bilico.vercel.app
 - **Onboarding** in 5 step (obiettivo, reddito, spese fisse, abitudini, tesoretto)
 - **Dashboard** con bilancia animata speso/libero, 3 tab (Casa, Movimenti, Obiettivi)
 - **Famiglia condivisa**: invito via link, quote 50/50, toggle *Io / Famiglia / Tutto*
-- **Scan scontrini** via Google Cloud Vision con auto-categorizzazione
+- **Scan scontrini** via Google Cloud Vision con auto-categorizzazione — funzione **PRO**, sbloccata dall'abbonamento in-app
 - **Spese ricorrenti** mensili con generazione automatica + data fine opzionale
 - **Privacy trasparente**: una spesa marcata privata appare comunque (importo, autore) ma con categoria/descrizione nascoste
 - **Trofei** — 12 badge a tema finance/film (Zio Paperone, Wolf of Wall Street, Thanos "Perfectly balanced", …)
@@ -65,14 +65,55 @@ npm run dev
 | `npm run cap:android` | Sync + apri Android Studio |
 | `npm run cap:ios` | Sync + apri Xcode |
 
+## 💳 Abbonamento Bilico PRO (acquisti in-app)
+
+La scansione scontrini è la funzione a pagamento. L'acquisto passa da
+**StoreKit / Play Billing** tramite **RevenueCat** (`src/lib/purchases.ts`,
+`src/hooks/usePro.ts`, `src/components/PaywallSheet.tsx`). Non esiste nessun
+canale di pagamento alternativo: farsi pagare fuori dallo store per sbloccare
+funzioni dell'app viola la guideline App Store 3.1.1.
+
+L'`appUserID` di RevenueCat è l'uid Firebase, quindi l'abbonamento segue
+l'account su qualsiasi dispositivo. `profile.isPremium` resta solo come
+concessione manuale per gli utenti storici e non viene mai riscritto dal
+flusso di acquisto.
+
+### Configurazione, in ordine
+
+1. **App Store Connect → Business**: l'Account Holder deve accettare il
+   **Paid Applications Agreement**. Finché non è "in effetto" StoreKit
+   restituisce **zero prodotti** e la paywall risulta vuota — è la causa
+   numero uno del rifiuto per guideline 2.1(b).
+2. **Crea l'abbonamento** in App Store Connect: gruppo di sottoscrizione,
+   **localizzazione del gruppo**, nome e descrizione localizzati, prezzo per
+   tutti i territori, screenshot di review. Se il prodotto resta in
+   *Missing Metadata* non viene restituito allo store.
+3. **Allega gli IAP alla versione** dell'app: alla prima submission vanno
+   inviati insieme al binario, non separatamente.
+4. **RevenueCat**: collega l'app, importa i prodotti, crea l'entitlement
+   con identificativo **`pro`** e mettilo nell'offering `current`.
+5. **Chiavi**: `VITE_REVENUECAT_IOS_KEY` e `VITE_REVENUECAT_ANDROID_KEY` in
+   `.env.local` (e su Vercel se serve). Sono chiavi pubbliche SDK.
+6. `npm run cap:sync` per registrare il plugin nativo, poi build.
+
+### Test prima di risottomettere
+
+Sandbox Apple ID su device reale (o TestFlight, che usa comunque la
+sandbox). Da verificare: i piani compaiono, l'acquisto va a buon fine,
+**Ripristina acquisti** funziona, e i link a termini e privacy nella paywall
+si aprono davvero — sono tutti requisiti della guideline 3.1.2.
+
+Su web gli acquisti sono disattivati per costruzione: la paywall spiega di
+usare l'app mobile.
+
 ## 📁 Struttura
 
 ```
 src/
   App.tsx                 routes
-  components/             BalanceScale, Ui, tokens, Trofei
-  hooks/                  useAuth, useTransactions, useBadges, useRecurring
-  lib/                    firebase, store (zustand), vision (OCR), badges, sharing
+  components/             BalanceScale, Ui, tokens, Trofei, PaywallSheet
+  hooks/                  useAuth, useTransactions, useBadges, useRecurring, usePro
+  lib/                    firebase, store (zustand), vision (OCR), badges, sharing, purchases (RevenueCat)
   pages/                  Login, Onboarding, Dashboard, Family, Join
   types/                  tipi condivisi
 
